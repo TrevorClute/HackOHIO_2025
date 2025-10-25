@@ -1,0 +1,3 @@
+.venv
+iee738/
+osu_hackathon/
