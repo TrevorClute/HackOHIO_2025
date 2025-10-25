@@ -94,3 +94,79 @@ def compute_stress_table(buses_df, lines_df, conds_df, flows_df,
         df = df.sort_values("utilization_pct", ascending=False)
     return df
 
+
+
+def compute_ratings_table(
+    buses_df: pd.DataFrame,
+    lines_df: pd.DataFrame,
+    conds_df: pd.DataFrame,
+    ambient_c: float,
+    wind_ms: float,
+    wind_angle_deg: float,
+    include_static: bool = True,
+) -> pd.DataFrame:
+    # helpers reused from compute_stress_table
+    def _build_bus_lookup(buses: pd.DataFrame):
+        out = {}
+        for _, r in buses.iterrows():
+            bid = int(r["name"])
+            kv = float(r.get("v_nom", r.get("kv", np.nan)))
+            busname = (str(r.get("busname"))
+                       if "busname" in r and pd.notna(r["busname"])
+                       else f"BUS_{bid}")
+            out[bid] = {"kv": kv, "busname": busname}
+        return out
+
+    def _build_cond_lookup(conds: pd.DataFrame):
+        if "conductor" not in conds.columns:
+            return {}
+        return conds.set_index("conductor").to_dict(orient="index")
+
+    BUS = _build_bus_lookup(buses_df)
+    COND = _build_cond_lookup(conds_df)
+
+    rows = []
+    for _, L in lines_df.iterrows():
+        lid = str(L["name"])
+        b0 = int(L["bus0"]); b1 = int(L["bus1"])
+        if b0 not in BUS:
+            continue
+        kv = float(BUS[b0]["kv"])
+
+        cond_name = str(L.get("conductor", ""))
+        if cond_name not in COND:
+            continue
+        cond_row = COND[cond_name]
+
+        mot_c = float(L.get("mot", 80.0))
+
+        # Dynamic IEEE-738 rating (Amps → MVA)
+        rating_a = ieee738_rating_amps_from_rows(
+            cond_row, mot_c, ambient_c, wind_ms, wind_angle_deg
+        )
+        rating_mva = amps_to_mva(rating_a, kv)
+
+        row = {
+            "line_id": lid,
+            "bus0": b0,
+            "bus1": b1,
+            "bus0_name": BUS[b0]["busname"],
+            "bus1_name": BUS.get(b1, {}).get("busname"),
+            "conductor": cond_name,
+            "voltage_kv": kv,
+            "mot_c": mot_c,
+            "rating_amps": float(rating_a),
+            "rating_mva": float(rating_mva),
+        }
+
+        if include_static and "s_nom" in L and pd.notna(L["s_nom"]):
+            row["static_s_nom_mva"] = float(L["s_nom"])
+
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    # Sort smallest rating first (weakest lines at top)
+    if not df.empty:
+        df = df.sort_values("rating_mva", ascending=True)
+    return df
+

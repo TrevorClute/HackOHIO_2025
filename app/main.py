@@ -9,9 +9,23 @@ from .config import (
     WARN_THRESHOLD, BAD_THRESHOLD
 )
 from .io import load_buses, load_lines, load_conductors, load_flows
-from .stress import compute_stress_table
+from .stress import compute_stress_table, compute_ratings_table
 
 # ---------- pydantic models ----------
+
+class RatingOut(BaseModel):
+    line_id: str
+    bus0: int
+    bus1: int
+    bus0_name: Optional[str] = None
+    bus1_name: Optional[str] = None
+    conductor: str
+    voltage_kv: float
+    mot_c: float
+    rating_amps: float
+    rating_mva: float
+    static_s_nom_mva: Optional[float] = None
+
 class StressOut(BaseModel):
     line_id: str
     bus0: int
@@ -84,6 +98,27 @@ def stress_summary(
             "No output. Make sure: 1) flows.csv has 'name,p0_nominal' with non-empty MW per line, "
             "2) conductor names in lines.csv match conductor_library.csv exactly, "
             "3) buses.csv has v_nom (kV) for each line’s bus0."
+        )
+    return df.to_dict(orient="records")
+
+@app.get("/ratings", response_model=List[RatingOut])
+def ratings(
+    ambient_c: float = Query(DEFAULT_AMBIENT_C, ge=-60, le=80),
+    wind_ms: float   = Query(DEFAULT_WIND_MS, ge=0, le=60),
+    wind_angle_deg: float = Query(DEFAULT_WIND_ANGLE_DEG, ge=0, le=90),
+    include_static: bool = Query(True),
+):
+    df = compute_ratings_table(
+        BUSES, LINES, CONDS,
+        ambient_c=ambient_c,
+        wind_ms=wind_ms,
+        wind_angle_deg=wind_angle_deg,
+        include_static=include_static,
+    )
+    if df.empty:
+        raise HTTPException(
+            400,
+            "No ratings computed. Check that lines.csv references conductors present in conductor_library.csv and buses.csv has v_nom."
         )
     return df.to_dict(orient="records")
 
