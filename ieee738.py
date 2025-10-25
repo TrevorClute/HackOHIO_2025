@@ -1,4 +1,4 @@
-"""Python implementation for Calcualting the Current-Temperature Relationship
+"""Python implementation for Calculating the Current-Temperature Relationship
 of Bare Overhead Conductors.
 
 References
