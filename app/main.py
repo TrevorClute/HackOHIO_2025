@@ -11,6 +11,11 @@ from .config import (
 from .io import load_buses, load_lines, load_conductors, load_flows
 from .stress import compute_stress_table, compute_ratings_table
 
+import json
+from fastapi.responses import JSONResponse
+from .config import GIS_LINES_GEOJSON
+from .stress import compute_ratings_table
+
 # ---------- pydantic models ----------
 
 class RatingOut(BaseModel):
@@ -121,4 +126,81 @@ def ratings(
             "No ratings computed. Check that lines.csv references conductors present in conductor_library.csv and buses.csv has v_nom."
         )
     return df.to_dict(orient="records")
+
+
+
+def _pick_name(props: dict):
+    # Join key: prefer "Name", fallback to "name"
+    if not isinstance(props, dict):
+        return None
+    return str(props.get("Name") or props.get("name") or "").strip() or None
+
+@app.get("/ratings_geojson")
+def ratings_geojson(
+    ambient_c: float = Query(DEFAULT_AMBIENT_C, ge=-60, le=80),
+    wind_ms: float   = Query(DEFAULT_WIND_MS, ge=0, le=60),
+    wind_angle_deg: float = Query(DEFAULT_WIND_ANGLE_DEG, ge=0, le=90),
+    include_static: bool = Query(True, description="Include static s_nom from lines.csv"),
+    include_unmatched: bool = Query(False, description="Keep features that did not match a line_id"),
+):
+    # 1) compute dynamic ratings table
+    df = compute_ratings_table(
+        BUSES, LINES, CONDS,
+        ambient_c=ambient_c,
+        wind_ms=wind_ms,
+        wind_angle_deg=wind_angle_deg,
+        include_static=include_static,
+    )
+    if df.empty:
+        raise HTTPException(400, "No ratings computed. Check conductors/buses/lines inputs.")
+
+    # 2) index by line_id for fast join
+    lut = df.set_index("line_id").to_dict(orient="index")
+
+    # 3) load GeoJSON features from disk
+    if not GIS_LINES_GEOJSON.exists():
+        raise HTTPException(404, f"GeoJSON not found: {GIS_LINES_GEOJSON}")
+    with GIS_LINES_GEOJSON.open("r", encoding="utf-8") as f:
+        gj = json.load(f)
+
+    features = gj.get("features", [])
+    out_features = []
+
+    for feat in features:
+        props = feat.get("properties", {}) or {}
+        line_id = _pick_name(props)
+        row = lut.get(line_id)
+
+        if row is None and not include_unmatched:
+            # skip features we can't enrich (no matching line_id)
+            continue
+
+        # Merge properties; keep original geometry unchanged
+        new_props = dict(props)
+        new_props.update({
+            # Include the id we matched on for debugging
+            "line_id": line_id,
+            # Dynamic ratings payload
+            "voltage_kv": row.get("voltage_kv") if row else None,
+            "conductor": row.get("conductor") if row else None,
+            "mot_c": row.get("mot_c") if row else None,
+            "rating_amps": row.get("rating_amps") if row else None,
+            "rating_mva": row.get("rating_mva") if row else None,
+            # Optional static rating
+            "static_s_nom_mva": row.get("static_s_nom_mva") if row else None,
+            # Weather echo for client transparency
+            "_ambient_c": ambient_c,
+            "_wind_ms": wind_ms,
+            "_wind_angle_deg": wind_angle_deg,
+            "_dynamic": True,
+        })
+
+        out_features.append({
+            "type": "Feature",
+            "geometry": feat.get("geometry"),
+            "properties": new_props,
+        })
+
+    fc = {"type": "FeatureCollection", "features": out_features}
+    return JSONResponse(fc)
 

@@ -4,6 +4,12 @@ import os
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
 
+# Path to your line geometry GeoJSON (server-side)
+GIS_LINES_GEOJSON = Path(
+    os.getenv("GIS_LINES_GEOJSON",
+              "./data/oneline_lines.geojson")  # set this to your real path
+)
+
 # input files
 BUSES_CSV  = Path(os.getenv("BUSES_CSV",  DATA_DIR / "buses.csv"))
 LINES_CSV  = Path(os.getenv("LINES_CSV",  DATA_DIR / "lines.csv"))
