@@ -109,22 +109,6 @@ const ParameterPanel = ({ parameters, onParameterChange, onRefresh, loading }) =
                 />
               </Box>
 
-              <Box mb={2}>
-                <Typography gutterBottom>Latitude: {parameters.latitude_deg}°</Typography>
-                <Slider
-                  value={parameters.latitude_deg}
-                  onChange={handleSliderChange("latitude_deg")}
-                  min={-90}
-                  max={90}
-                  step={0.1}
-                  marks={[
-                    { value: -90, label: "-90°" },
-                    { value: 0, label: "0°" },
-                    { value: 21.3, label: "21.3°" },
-                    { value: 90, label: "90°" },
-                  ]}
-                />
-              </Box>
 
               <Box mb={2}>
                 <Typography gutterBottom>Sun Time: {parameters.sun_time_hr} hr</Typography>
@@ -200,7 +184,7 @@ const ParameterPanel = ({ parameters, onParameterChange, onRefresh, loading }) =
 
               <Box mb={2}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Direction</InputLabel>
+                  <InputLabel>Wind Direction</InputLabel>
                   <Select value={parameters.direction} onChange={handleSelectChange("direction")} label="Direction">
                     <MenuItem value="EastWest">East-West</MenuItem>
                     <MenuItem value="NorthSouth">North-South</MenuItem>
@@ -208,15 +192,6 @@ const ParameterPanel = ({ parameters, onParameterChange, onRefresh, loading }) =
                 </FormControl>
               </Box>
 
-              <Box mb={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Atmosphere</InputLabel>
-                  <Select value={parameters.atmosphere} onChange={handleSelectChange("atmosphere")} label="Atmosphere">
-                    <MenuItem value="Clear">Clear</MenuItem>
-                    <MenuItem value="Industrial">Industrial</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
 
               <Box mb={2}>
                 <Typography gutterBottom>Warning Threshold: {parameters.warn_threshold}%</Typography>

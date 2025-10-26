@@ -274,15 +274,6 @@ const MapVisualization = ({ stressData = [], ratingsData, loading, warnThreshold
 
         <Divider sx={{ my: 1 }} />
 
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
-          <Typography variant="body2" sx={{ mr: 1 }}>
-            <strong>Bus/Substations:</strong>
-          </Typography>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <div style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: "#1976d2" }} />
-            <Typography variant="body2">All buses (size varies by voltage)</Typography>
-          </Box>
-        </Box>
       </Paper>
     </Box>
   );
