@@ -90,12 +90,23 @@ def stress_summary(
     wind_ms: float   = Query(DEFAULT_WIND_MS, ge=0, le=60),
     wind_angle_deg: float = Query(DEFAULT_WIND_ANGLE_DEG, ge=0, le=90),
     warn_threshold: float = Query(WARN_THRESHOLD, ge=0, le=100),
-    bad_threshold: float  = Query(BAD_THRESHOLD,  ge=0, le=100)
+    bad_threshold: float  = Query(BAD_THRESHOLD,  ge=0, le=100),
+    elevation_ft: float = Query(0.0, ge=0, le=50000, description="Height above sea level in feet"),
+    latitude_deg: float = Query(21.3, ge=-90, le=90, description="Latitude in degrees"),
+    sun_time_hr: float = Query(12.0, ge=0, le=24, description="Hour of day (0-24)"),
+    emissivity: float = Query(0.5, ge=0, le=1, description="Emissivity (0-1)"),
+    absorptivity: float = Query(0.5, ge=0, le=1, description="Absorptivity (0-1)"),
+    direction: str = Query("EastWest", description="Conductor orientation: EastWest or NorthSouth"),
+    atmosphere: str = Query("Clear", description="Atmosphere type: Clear or Industrial"),
+    date_str: str = Query("12 Jun", description="Date in format like '12 Jun'")
 ):
     df = compute_stress_table(
         BUSES, LINES, CONDS, FLOWS,
         ambient_c=ambient_c, wind_ms=wind_ms, wind_angle_deg=wind_angle_deg,
-        warn_threshold=warn_threshold, bad_threshold=bad_threshold
+        warn_threshold=warn_threshold, bad_threshold=bad_threshold,
+        elevation_ft=elevation_ft, latitude_deg=latitude_deg, sun_time_hr=sun_time_hr,
+        emissivity=emissivity, absorptivity=absorptivity, direction=direction,
+        atmosphere=atmosphere, date_str=date_str
     )
     if df.empty:
         raise HTTPException(
@@ -112,6 +123,14 @@ def ratings(
     wind_ms: float   = Query(DEFAULT_WIND_MS, ge=0, le=60),
     wind_angle_deg: float = Query(DEFAULT_WIND_ANGLE_DEG, ge=0, le=90),
     include_static: bool = Query(True),
+    elevation_ft: float = Query(0.0, ge=0, le=50000, description="Height above sea level in feet"),
+    latitude_deg: float = Query(21.3, ge=-90, le=90, description="Latitude in degrees"),
+    sun_time_hr: float = Query(12.0, ge=0, le=24, description="Hour of day (0-24)"),
+    emissivity: float = Query(0.5, ge=0, le=1, description="Emissivity (0-1)"),
+    absorptivity: float = Query(0.5, ge=0, le=1, description="Absorptivity (0-1)"),
+    direction: str = Query("EastWest", description="Conductor orientation: EastWest or NorthSouth"),
+    atmosphere: str = Query("Clear", description="Atmosphere type: Clear or Industrial"),
+    date_str: str = Query("12 Jun", description="Date in format like '12 Jun'")
 ):
     df = compute_ratings_table(
         BUSES, LINES, CONDS,
@@ -119,6 +138,9 @@ def ratings(
         wind_ms=wind_ms,
         wind_angle_deg=wind_angle_deg,
         include_static=include_static,
+        elevation_ft=elevation_ft, latitude_deg=latitude_deg, sun_time_hr=sun_time_hr,
+        emissivity=emissivity, absorptivity=absorptivity, direction=direction,
+        atmosphere=atmosphere, date_str=date_str
     )
     if df.empty:
         raise HTTPException(
@@ -142,6 +164,14 @@ def ratings_geojson(
     wind_angle_deg: float = Query(DEFAULT_WIND_ANGLE_DEG, ge=0, le=90),
     include_static: bool = Query(True, description="Include static s_nom from lines.csv"),
     include_unmatched: bool = Query(False, description="Keep features that did not match a line_id"),
+    elevation_ft: float = Query(0.0, ge=0, le=50000, description="Height above sea level in feet"),
+    latitude_deg: float = Query(21.3, ge=-90, le=90, description="Latitude in degrees"),
+    sun_time_hr: float = Query(12.0, ge=0, le=24, description="Hour of day (0-24)"),
+    emissivity: float = Query(0.5, ge=0, le=1, description="Emissivity (0-1)"),
+    absorptivity: float = Query(0.5, ge=0, le=1, description="Absorptivity (0-1)"),
+    direction: str = Query("EastWest", description="Conductor orientation: EastWest or NorthSouth"),
+    atmosphere: str = Query("Clear", description="Atmosphere type: Clear or Industrial"),
+    date_str: str = Query("12 Jun", description="Date in format like '12 Jun'")
 ):
     # 1) compute dynamic ratings table
     df = compute_ratings_table(
@@ -150,6 +180,9 @@ def ratings_geojson(
         wind_ms=wind_ms,
         wind_angle_deg=wind_angle_deg,
         include_static=include_static,
+        elevation_ft=elevation_ft, latitude_deg=latitude_deg, sun_time_hr=sun_time_hr,
+        emissivity=emissivity, absorptivity=absorptivity, direction=direction,
+        atmosphere=atmosphere, date_str=date_str
     )
     if df.empty:
         raise HTTPException(400, "No ratings computed. Check conductors/buses/lines inputs.")

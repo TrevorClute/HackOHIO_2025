@@ -29,7 +29,15 @@ def ieee738_rating_amps_from_rows(conductor_row: dict,
                                   mot_c: float,
                                   ambient_c: float,
                                   wind_ms: float,
-                                  wind_angle_deg: float) -> float:
+                                  wind_angle_deg: float,
+                                  elevation_ft: float = 0.0,
+                                  latitude_deg: float = 21.3,
+                                  sun_time_hr: float = 12.0,
+                                  emissivity: float = 0.5,
+                                  absorptivity: float = 0.5,
+                                  direction: str = "EastWest",
+                                  atmosphere: str = "Clear",
+                                  date_str: str = "12 Jun") -> float:
     """
     Build ConductorParams from CSV fields and call Conductor(...).steady_state_thermal_rating()
     conductor_row requires:
@@ -55,14 +63,14 @@ def ieee738_rating_amps_from_rows(conductor_row: dict,
         Ta=ambient_c,
         WindVelocity=wind_fps,
         WindAngleDeg=float(max(0.0, min(90.0, wind_angle_deg))),
-        Elevation=ELEVATION_FT,
-        Latitude=LATITUDE_DEG,
-        SunTime=SUNTIME_HR,
-        Emissivity=EMISSIVITY,
-        Absorptivity=ABSORPTIVITY,
-        Direction=DIRECTION,       # 'EastWest' or 'NorthSouth'
-        Atmosphere=ATMOSPHERE,     # 'Clear' or 'Industrial'
-        Date=DATE_STR,
+        Elevation=elevation_ft,
+        Latitude=latitude_deg,
+        SunTime=sun_time_hr,
+        Emissivity=emissivity,
+        Absorptivity=absorptivity,
+        Direction=direction,       # 'EastWest' or 'NorthSouth'
+        Atmosphere=atmosphere,     # 'Clear' or 'Industrial'
+        Date=date_str,
 
         # conductor + resistance vs temp
         Tc=mot_c,
@@ -73,6 +81,11 @@ def ieee738_rating_amps_from_rows(conductor_row: dict,
     )
 
     amps = Conductor(params).steady_state_thermal_rating()
+    
+    # Validate the result
+    if amps is None or amps < 0 or not np.isfinite(amps):
+        raise ValueError(f"Invalid IEEE 738 rating result: {amps}")
+    
     return float(amps)
 
 

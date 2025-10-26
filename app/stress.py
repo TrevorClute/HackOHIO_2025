@@ -7,6 +7,11 @@ def _build_bus_lookup(buses: pd.DataFrame):
     for _, r in buses.iterrows():
         bid = int(r["name"])
         kv = float(r.get("v_nom", r.get("kv", np.nan)))
+        
+        # Skip buses with invalid voltage data
+        if pd.isna(kv) or kv <= 0:
+            continue
+            
         busname = str(r["busname"]) if "busname" in buses.columns and pd.notna(r["busname"]) else f"BUS_{bid}"
         out[bid] = {"kv": kv, "busname": busname}
     return out
@@ -14,11 +19,22 @@ def _build_bus_lookup(buses: pd.DataFrame):
 def _build_cond_lookup(conds: pd.DataFrame):
     if "conductor" not in conds.columns:
         return {}
+    
+    # Validate required fields
+    required_fields = ["res_25c_ohm_per_mile", "res_50c_ohm_per_mile", "diameter_in"]
+    missing_fields = [f for f in required_fields if f not in conds.columns]
+    if missing_fields:
+        raise ValueError(f"Conductor library missing required fields: {missing_fields}")
+    
     return conds.set_index("conductor").to_dict(orient="index")
 
 def compute_stress_table(buses_df, lines_df, conds_df, flows_df,
                          ambient_c: float, wind_ms: float, wind_angle_deg: float,
-                         warn_threshold: float, bad_threshold: float) -> pd.DataFrame:
+                         warn_threshold: float, bad_threshold: float,
+                         elevation_ft: float = 0.0, latitude_deg: float = 21.3, 
+                         sun_time_hr: float = 12.0, emissivity: float = 0.5, 
+                         absorptivity: float = 0.5, direction: str = "EastWest",
+                         atmosphere: str = "Clear", date_str: str = "12 Jun") -> pd.DataFrame:
     BUS = _build_bus_lookup(buses_df)
     COND = _build_cond_lookup(conds_df)
 
@@ -51,15 +67,28 @@ def compute_stress_table(buses_df, lines_df, conds_df, flows_df,
         mot_c = float(L.get("mot", 80.0))
 
         # 1) dynamic rating via IEEE-738 (A -> MVA)
-        rating_a = ieee738_rating_amps_from_rows(cond_row, mot_c, ambient_c, wind_ms, wind_angle_deg)
-        rating_mva = amps_to_mva(rating_a, kv)
+        try:
+            rating_a = ieee738_rating_amps_from_rows(
+                cond_row, mot_c, ambient_c, wind_ms, wind_angle_deg,
+                elevation_ft=elevation_ft, latitude_deg=latitude_deg, sun_time_hr=sun_time_hr,
+                emissivity=emissivity, absorptivity=absorptivity, direction=direction,
+                atmosphere=atmosphere, date_str=date_str
+            )
+            rating_mva = amps_to_mva(rating_a, kv)
+        except (ValueError, KeyError, TypeError) as e:
+            # Skip lines with invalid conductor data
+            continue
 
         # 2) actual flow: S (MVA) -> A
         flow_mva = s_mva
         flow_a = mva_to_amps(flow_mva, kv)
 
         # 3) utilization & status
-        util = (flow_a / rating_a) * 100.0 if rating_a > 0 else float("inf")
+        if rating_a <= 0:
+            util = float("inf")
+        else:
+            util = (flow_a / rating_a) * 100.0
+            
         if util > bad_threshold:
             status, overloaded = "BAD", True
         elif util >= warn_threshold:
@@ -104,6 +133,10 @@ def compute_ratings_table(
     wind_ms: float,
     wind_angle_deg: float,
     include_static: bool = True,
+    elevation_ft: float = 0.0, latitude_deg: float = 21.3, 
+    sun_time_hr: float = 12.0, emissivity: float = 0.5, 
+    absorptivity: float = 0.5, direction: str = "EastWest",
+    atmosphere: str = "Clear", date_str: str = "12 Jun"
 ) -> pd.DataFrame:
     # helpers reused from compute_stress_table
     def _build_bus_lookup(buses: pd.DataFrame):
@@ -111,6 +144,11 @@ def compute_ratings_table(
         for _, r in buses.iterrows():
             bid = int(r["name"])
             kv = float(r.get("v_nom", r.get("kv", np.nan)))
+            
+            # Skip buses with invalid voltage data
+            if pd.isna(kv) or kv <= 0:
+                continue
+                
             busname = (str(r.get("busname"))
                        if "busname" in r and pd.notna(r["busname"])
                        else f"BUS_{bid}")
@@ -120,6 +158,13 @@ def compute_ratings_table(
     def _build_cond_lookup(conds: pd.DataFrame):
         if "conductor" not in conds.columns:
             return {}
+        
+        # Validate required fields
+        required_fields = ["res_25c_ohm_per_mile", "res_50c_ohm_per_mile", "diameter_in"]
+        missing_fields = [f for f in required_fields if f not in conds.columns]
+        if missing_fields:
+            raise ValueError(f"Conductor library missing required fields: {missing_fields}")
+        
         return conds.set_index("conductor").to_dict(orient="index")
 
     BUS = _build_bus_lookup(buses_df)
@@ -141,10 +186,17 @@ def compute_ratings_table(
         mot_c = float(L.get("mot", 80.0))
 
         # Dynamic IEEE-738 rating (Amps → MVA)
-        rating_a = ieee738_rating_amps_from_rows(
-            cond_row, mot_c, ambient_c, wind_ms, wind_angle_deg
-        )
-        rating_mva = amps_to_mva(rating_a, kv)
+        try:
+            rating_a = ieee738_rating_amps_from_rows(
+                cond_row, mot_c, ambient_c, wind_ms, wind_angle_deg,
+                elevation_ft=elevation_ft, latitude_deg=latitude_deg, sun_time_hr=sun_time_hr,
+                emissivity=emissivity, absorptivity=absorptivity, direction=direction,
+                atmosphere=atmosphere, date_str=date_str
+            )
+            rating_mva = amps_to_mva(rating_a, kv)
+        except (ValueError, KeyError, TypeError) as e:
+            # Skip lines with invalid conductor data
+            continue
 
         row = {
             "line_id": lid,
